@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
 
 Read functions for screeningmodels and screening plots
 ```{r}
-source("code/sourcecode_screening2023-MH.R")
+source("code/sourcecode_screening2023-NODC.R")
 ```
 
 Additionally janitor is needed?
@@ -50,8 +50,8 @@ read_tsv("data_in/Vdr 88-17 ANC300 MH.txt") %>%
 
 In case the outputfile should be saved as rds file we can use the command below. This create a quite large file.
 ```{r}
-saveRDS(screenmodel_out,"data_out/screenmodel_out_MH.rds")
-#screenmodel_out <- readRDS("data_out/screenmodel_out_MH-test3.rds")
+saveRDS(screenmodel_out,"data_out/screenmodel_out_NODC.rds")
+#screenmodel_out <- readRDS("data_out/screenmodel_out_NODC.rds")
 ```
 
 The created tibble screenmodel_out contains all necessary information to create the different types of plots. 
@@ -83,9 +83,6 @@ write.table(individual_trend_var,
 
 Sulphate, Alsterälven (Figure 2, right)
 ```{r}
-
-
-
 
  plot1 <- screenmodel_out %>%
     filter(SWEREFID=="6585489-420879", name=="pH")%>%
@@ -120,7 +117,7 @@ screenmodel_out%>% mutate(order=desc(as.numeric(str_sub(SWEREFID, start=1, end=7
 ```
 
 Trend screening plot visualising p-values sorted North to South (Figure 4):
-P-VÄRDEN!!!!!
+P-VÄRDEN skapas!
 ```{r}
 screenmodel_out%>% 
   filter(SWEREFID=="6585489-420879", name=="pH")%>%
