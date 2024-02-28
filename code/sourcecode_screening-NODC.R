@@ -958,7 +958,7 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
 }
 ####### MH START #######
 
-print_individual_trend_mh <- function(x, y=NULL, title=NULL){
+print_individual_trend_mh <- function(x, y=NULL, title=NULL, variable=NULL){
   if(nrow(x) != 1){stop("Filter out the variable (and/or station) you are interested in.")}
   annualterm <- predict(x$fit[[1]], newdata=x$data[[1]], type="terms")[,1]
   intercept <- x$fit[[1]]$coef["(Intercept)"]
@@ -969,7 +969,8 @@ output1 <-  x$fderiv[[1]] %>%
            sign=sign(derivative),
            signif_sign = signif*sign, #trend-ett-noll-minusett
            Provplats_ID = unique(x$Provplats_ID), #stationsid
-           name = unique(x$name)) %>% # variabelnamn
+           STATN = unique(x$STATN),
+           name = ifelse(is.null(variable), unique(x$name), variable)) %>% # variabelnamn
     ungroup %>% bind_cols(x$data[[1]],.) %>%
     mutate(trend = annualterm+intercept) %>%
     drop_na(variable)
