@@ -1,0 +1,229 @@
+---
+title: "GAM"
+date: "2024-02-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+```
+
+Read functions for screeningmodels and screening plots
+```{r}
+source("code/sourcecode_screening-NODC.R")
+```
+
+Additionally janitor is needed?
+
+Read data and create needed variable Date from year, month and day. Keep pH, sulphate, Date and stationID (Provplats_ID), rename sulphate and restructure data into long format. Run function screeningmodeling. This can take a while depending on how many series need to be processed and how complex the fitting process is. If unsure start with a subset. 
+```{r}
+filename <- ("PTOT_monthly.txt")
+
+read_tsv(file.path("data_in", filename), locale = locale(encoding="latin1")) %>%
+  mutate(Date = paste(YEAR, MONTH, "15", sep="-") %>%
+           ymd()) %>%
+  mutate(STATN=gsub("/","-", STATN)) %>%
+  select(mean,count, Date, REG_ID, STATN)%>%
+  rename(Provplats_ID = REG_ID,
+         n_samples = count) %>%
+  drop_na(mean) %>% 
+  pivot_longer(cols=c("mean")) %>% 
+  group_by(Provplats_ID,name) %>% # name är variabelnamn från modellen
+  mutate(n=length(Date)) %>% 
+  screeningmodeling(values=  value,
+                    datevar = Date, 
+                    link = "identity", 
+                    conf.type = "conf",
+                    conf.level=0.95,
+                    beep = TRUE, 
+                    tdist = F,
+                    autocor = FALSE, # FALSE ger den enklare varianten av modellen TRUE ger den mer komplexa varianten. autocor indicates whether autocorrelation should be modelled (TRUE) or not (FALSE)
+                    Provplats_ID, name, STATN) -> 
+  screenmodel_out
+```
+
+In case the outputfile should be saved as rds file we can use the command below. This create a quite large file.
+```{r}
+#saveRDS(screenmodel_out,"data_out/screenmodel_out_NTOT-monthly.rds")
+#screenmodel_out <- readRDS("data_out/screenmodel_out_NODC.rds")
+```
+
+The created tibble screenmodel_out contains all necessary information to create the different types of plots. 
+
+Plots for an individual series:
+pH, Alsterälven (Fiugre 2, left):
+```{r}
+for(i in 1:length(unique(screenmodel_out$Provplats_ID))) {
+
+individual_trend <-  screenmodel_out%>%
+  filter(Provplats_ID==unique(screenmodel_out$Provplats_ID)[i])
+  
+  for(j in 1:length(unique(individual_trend$name))) {
+
+individual_trend_var <- individual_trend %>%
+  filter(name==unique(individual_trend$name)[j]) %>%
+    
+print_individual_trend_mh(y = unique(individual_trend$name)[j])
+
+write.table(individual_trend_var,
+            paste0("data_out/individual_trend_",sub("_[^_]*$", "", filename),
+                   "_",unique(screenmodel_out$STATN)[i],".csv"),
+            sep = ",",
+            fileEncoding = "utf-8",
+            row.names = FALSE)
+
+}}
+  
+```
+
+Sulphate, Alsterälven (Figure 2, right)
+```{r}
+for(i in 1:length(unique(screenmodel_out$STATN))) {
+
+ plot1 <- screenmodel_out %>%
+    filter(STATN==unique(screenmodel_out$STATN)[i])%>%
+plot_individual_trend(y = "mean", sub("_[^_]*$", "", filename))  
+ 
+ggsave(paste0("plots/individual_trend_", sub("_[^_]*$", "", filename),
+                   "_",unique(screenmodel_out$STATN)[i],".png"), plot1)
+
+}
+
+```
+
+
+
+```{r}
+screenmodel_out%>%
+  filter(Provplats_ID=="6585489-420879", name=="mean")%>%
+plot_individual_trend_mh(y = "mean")
+```
+
+
+Trend screening plot sorted using the Provplats_ID (South to north, not shown):
+
+```{r}
+screenmodel_out%>%arrange(desc(Provplats_ID))%>% plot_screeningtrends(sorting = Provplats_ID, y_id = Provplats_ID, wrappingvar = name)
+```
+
+Trend screening plot sorted by the inverse of Provplats_ID (North to South, Figure 3):
+```{r}
+screenmodel_out%>% mutate(order=desc(as.numeric(str_sub(Provplats_ID, start=1, end=7))))%>%plot_screeningtrends(sorting = order, y_id = Provplats_ID, wrappingvar = name)
+```
+
+Trend screening plot visualising p-values sorted North to South (Figure 4):
+P-VÄRDEN skapas!
+```{r}
+screenmodel_out%>% 
+  filter(Provplats_ID=="6585489-420879", name=="pH")%>%
+  mutate(order=desc(as.numeric(str_sub(Provplats_ID, start=1, end=7))))%>%
+  print_screeningtrends_pvalues(sorting = order, y_id = Provplats_ID, wrappingvar = name)
+```
+
+Proportions of increasing, decreasing and non-significant trends (Figure 5):
+```{r}
+screenmodel_out %>% plot_proportions(wrappingvar = name)
+```
+
+
+
+Plotting trend magnitudes compared to the mean of the first three years in each series (sorted North to South):
+pH (Figure 6, upper)
+```{r}
+screenmodel_out %>% filter(name=="pH")%>% mutate(order=desc(as.numeric(str_sub(Provplats_ID, start=1, end=7))))%>% plot_screeningtrends_reference(sorting = order, y_id = Provplats_ID, wrappingvar = name)
+```
+
+Sulphate (Figure 6, lower)
+```{r}
+screenmodel_out %>% filter(name=="mean")%>% mutate(order=desc(as.numeric(str_sub(Provplats_ID, start=1, end=7))))%>% plot_screeningtrends_reference(sorting = order, y_id = Provplats_ID, wrappingvar = name)
+```
+Adjusting the order of sites presented, e.g. by sorting accoring to reference mean (mean of the first three years, Figure 7):
+```{r}
+  screenmodel_out%>%
+  filter(name=="mean")%>%
+    unnest(cols=c(predict, data))%>%
+    filter(decimaldate>=decimaldate[1] & decimaldate<=decimaldate[1]+3)%>%
+    summarize(reference=mean(`s(decimaldate)`+intercept, na.rm=TRUE))->refmean
+
+screenmodel_out%>%
+   filter(name=="mean")%>%
+  left_join(refmean)%>% 
+  plot_screeningtrends_reference(sorting = reference, y_id = Provplats_ID)
+
+```
+
+Individual series for Tore älv (Figure 10, left):
+```{r}
+screenmodel_out%>%
+  filter(Provplats_ID=="7334144-846887", name=="mean")%>%
+plot_individual_trend(y = "mean")
+```
+
+
+
+Plotting relative trend magnitudes, i.e. change at a certain time point relative to average level at the same time point:
+Sulphate (Figure 10, right):
+```{r}
+screenmodel_out %>% filter(name=="mean")%>% mutate(order=desc(as.numeric(str_sub(Provplats_ID, start=1, end=7))))%>% plot_screeningtrends_relative(sorting = order, y_id = Provplats_ID, wrappingvar = name)
+```
+
+
+
+
+Plot data data example (not shown):
+```{r}
+screenmodel_out %>% plot_data %>% head
+```
+
+Exctract splines and derivatives (not shown):
+
+```{r}
+screenmodel_out$fit[[1]] %>% splines_and_derivative() %>% head()
+```
+
+```{r}
+screenmodel_out$fit[[37]] %>% splines_and_derivative() %>% plot()
+```
+
+Mean values for the first three years and the last three years in each series (Supplementary, Table A1)
+```{r}
+screenmodel_out%>%
+  filter(name=="mean")%>%
+    unnest(cols=c(predict, data))%>%
+    filter(decimaldate<=decimaldate[n()] & decimaldate>=decimaldate[n()]-3)%>%
+    summarize(averagelast=mean(`s(decimaldate)`+intercept, na.rm=TRUE))->refmeanLast
+
+screenmodel_out %>% 
+  filter(name=="mean")%>%
+    left_join(refmean)%>%
+    left_join(refmeanLast)%>%
+  arrange(reference)%>%
+  select(Provplats_ID, intercept, reference, averagelast)->table1
+```
+
+
+
+
+
+Referenceplot for pH (not included in paper)
+```{r}
+  test_out%>%
+  filter(name=="pH")%>%
+    unnest(cols=c(predict, data))%>%
+    filter(decimaldate>=decimaldate[1] & decimaldate<=decimaldate[1]+3)%>%
+    summarize(reference=mean(`s(decimaldate)`+intercept, na.rm=TRUE))->refmean
+
+test_out%>%
+   filter(name=="pH")%>%
+  left_join(refmean)%>% 
+  plot_screeningtrends_reference(sorting = reference, y_id = Provplats_ID)
+```
