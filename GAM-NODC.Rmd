@@ -1,8 +1,9 @@
 ---
 title: "GAM"
-date: "2024-02-28"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 params: 
   filename: "PTOT_monthly.txt"
+  time_res: "monthly" # monthly or yearly
 output: pdf_document
 knit: (function(inputFile, encoding) {
                         rmarkdown::render(inputFile,
@@ -12,6 +13,8 @@ knit: (function(inputFile, encoding) {
 
 ---
 subtitle: `r tools::file_path_sans_ext(params$filename)`
+params:
+  time_res: "monthly" # monthly or yearly
 ---
 
 ```{r setup, include=FALSE}
@@ -29,7 +32,15 @@ Read data and create needed variable Date from year, month and day. Keep pH, sul
 ```{r run_model}
 filename <- params$filename
 
-data <- read_tsv(file.path("data_in", filename), locale = locale(encoding="latin1")) %>%
+data <- read_tsv(file.path("data_in", filename), locale = locale(encoding="latin1")) 
+
+for (i in 1:nrow(data)) {
+  if (params$time_res != "monthly") {
+    data$MONTH <- "01"
+  }
+}
+
+data <- data %>%
   mutate(Date = paste(YEAR, MONTH, "15", sep="-") %>%
            ymd()) %>%
   mutate(STATN=gsub("/","-", STATN)) %>%
@@ -84,11 +95,22 @@ for(i in 1:length(unique(screenmodel_out$Provplats_ID))) {
     individual_trend_var <- individual_trend %>%
       filter(name==unique(individual_trend$name)[j]) %>%
       print_individual_trend_mh(y = unique(individual_trend$name)[j], variable = sub("_[^_]*$", "", filename)) %>%
-      left_join(individual_data_var, by = "date")
+      left_join(individual_data_var, by = "date") %>%
+      rename(Provplats_namn = STATN,
+             variable_name = name) %>%
+      relocate(Provplats_ID,
+               Provplats_namn,
+               variable_name,
+               n_samples)
     
     write.table(individual_trend_var,
-                paste0("data_out/individual_trend_",sub("_[^_]*$", "", filename),
-                       "_",unique(screenmodel_out$STATN)[i],".csv"),
+                paste0("data_out/individual_",
+                       params$time_res,
+                       "_trend_",
+                       sub("_[^_]*$", "", filename),
+                       "_",
+                       unique(screenmodel_out$STATN)[i], 
+                       ".csv"),
                 sep = ",",
                 fileEncoding = "utf-8",
                 row.names = FALSE)
@@ -107,8 +129,13 @@ for(i in 1:length(unique(screenmodel_out$STATN))) {
   
   print(plot)
   
-  ggsave(paste0("plots/individual_trend_", sub("_[^_]*$", "", filename),
-                "_",unique(screenmodel_out$STATN)[i],".png"), plot)
+  ggsave(paste0("plots/individual_",
+                params$time_res,
+                "_trend_",
+                sub("_[^_]*$", "", filename),
+                "_",
+                unique(screenmodel_out$STATN)[i],
+                ".png"), plot)
   
 }
 
