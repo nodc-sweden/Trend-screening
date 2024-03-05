@@ -10,3 +10,4 @@ plots/*.png
 data_out/*.csv
 reports/*.pdf
 reports/*.html
+data_in/*.txt
