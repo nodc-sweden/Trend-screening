@@ -2,19 +2,18 @@
 title: "GAM"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 params: 
-  filename: "PTOT_monthly.txt"
-  time_res: "monthly" # monthly or yearly
-output: pdf_document
+  filename: "NTOT_yearly.txt"
+  time_res: "yearly" # monthly or yearly
+  depth_interval: "surface" #"bottom"
+output: html_document
 knit: (function(inputFile, encoding) {
                         rmarkdown::render(inputFile,
                         encoding=encoding, 
-                        output_file="reports/GAM-NODC.pdf") })
+                        output_file="reports/GAM-NODC.html") })
 ---
 
 ---
 subtitle: `r tools::file_path_sans_ext(params$filename)`
-params:
-  time_res: "monthly" # monthly or yearly
 ---
 
 ```{r setup, include=FALSE}
@@ -32,16 +31,47 @@ Read data and create needed variable Date from year, month and day. Keep pH, sul
 ```{r run_model}
 filename <- params$filename
 
+param_name <- sub("_[^_]*$", "", filename)
+
+
 data <- read_tsv(file.path("data_in", filename), locale = locale(encoding="latin1")) 
 
+if (params$depth_interval == "surface") {
+  data <- data %>%
+    filter(Depth_interval == "0-10 m")
+} else {
+  data <- data %>%
+    filter(Depth_interval != "0-10 m") 
+}
+
+
+
+
 for (i in 1:nrow(data)) {
-  if (params$time_res != "monthly") {
+  if (params$time_res == "yearly") {
     data$MONTH <- "01"
+    data$DAY <- "15"
   }
 }
 
+for (i in 1:nrow(data)) {
+  if (params$time_res == "monthly") {
+    data$DAY <- "15"
+  }
+}
+
+
+for (i in 1:nrow(data)) {
+  if (params$time_res == "visit") {
+    data$DAY <- day(data$SDATE)
+    data$count <- "1"
+    colnames(data)[1] <- "mean" 
+  }
+}
+
+
 data <- data %>%
-  mutate(Date = paste(YEAR, MONTH, "15", sep="-") %>%
+  mutate(Date = paste(YEAR, MONTH, DAY, sep="-") %>%
            ymd()) %>%
   mutate(STATN=gsub("/","-", STATN)) %>%
   select(mean,count, Date, REG_ID, STATN)%>%
@@ -110,6 +140,8 @@ for(i in 1:length(unique(screenmodel_out$Provplats_ID))) {
                        sub("_[^_]*$", "", filename),
                        "_",
                        unique(screenmodel_out$STATN)[i], 
+                       "_",
+                       params$depth_interval,
                        ".csv"),
                 sep = ",",
                 fileEncoding = "utf-8",
@@ -135,6 +167,8 @@ for(i in 1:length(unique(screenmodel_out$STATN))) {
                 sub("_[^_]*$", "", filename),
                 "_",
                 unique(screenmodel_out$STATN)[i],
+                "_",
+                params$depth_interval,
                 ".png"), plot)
   
 }

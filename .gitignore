@@ -9,3 +9,4 @@ MH-MK.R
 plots/*.png
 data_out/*.csv
 reports/*.pdf
+reports/*.html
