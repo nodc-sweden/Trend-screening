@@ -2,9 +2,7 @@
 title: "GAM"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 params: 
-  filename: "NTOT_yearly.txt"
-  time_res: "yearly" # monthly or yearly
-  depth_interval: "surface" #"bottom"
+  filename: "trenderHAV.csv"
 output: html_document
 knit: (function(inputFile, encoding) {
                         rmarkdown::render(inputFile,
@@ -31,68 +29,74 @@ Read data and create needed variable Date from year, month and day. Keep pH, sul
 ```{r run_model}
 filename <- params$filename
 
-param_name <- sub("_[^_]*$", "", filename)
+data <- read_tsv(file.path("data_in", filename), locale = locale(encoding="UTF-8")) 
 
-
-data <- read_tsv(file.path("data_in", filename), locale = locale(encoding="latin1")) 
-
-if (params$depth_interval == "surface") {
-  data <- data %>%
-    filter(Depth_interval == "0-10 m")
-} else {
-  data <- data %>%
-    filter(Depth_interval != "0-10 m") 
-}
-
-
-
-
-for (i in 1:nrow(data)) {
-  if (params$time_res == "yearly") {
-    data$MONTH <- "01"
-    data$DAY <- "15"
-  }
-}
-
-for (i in 1:nrow(data)) {
-  if (params$time_res == "monthly") {
-    data$DAY <- "15"
-  }
-}
-
-
-for (i in 1:nrow(data)) {
-  if (params$time_res == "visit") {
-    data$DAY <- day(data$SDATE)
-    data$count <- "1"
-    colnames(data)[1] <- "mean" 
-  }
-}
-
+data$MONTH <- "01"
+data$DAY <- "15"
 
 data <- data %>%
   mutate(Date = paste(YEAR, MONTH, DAY, sep="-") %>%
            ymd()) %>%
-  mutate(STATN=gsub("/","-", STATN)) %>%
-  select(mean,count, Date, REG_ID, STATN)%>%
+  mutate(STATN=gsub("/","-", STATN) )%>%
+  # filter(count > 5) %>%
+  select(year_mean,count, variable, Date, REG_ID, STATN) %>%
   rename(Provplats_ID = REG_ID,
          n_samples = count) %>%
-  drop_na(mean) %>% 
-  pivot_longer(cols=c("mean")) %>% 
-  group_by(Provplats_ID,name,STATN) %>% # name är variabelnamn från modellen
-  mutate(n=length(Date)) 
+  drop_na(year_mean) %>% 
+  pivot_longer(cols=c("year_mean")) %>%
+  rename(trendvariabel = variable) 
 
-data %>% 
-  screeningmodeling(values=  value,
-                    datevar = Date, 
-                    link = "identity", 
-                    conf.type = "conf",
-                    conf.level=0.95,
-                    beep = TRUE, 
-                    tdist = F,
-                    autocor = FALSE, # FALSE ger den enklare varianten av modellen TRUE ger den mer komplexa varianten. autocor indicates whether autocorrelation should be modelled (TRUE) or not (FALSE)
-                    Provplats_ID, name, STATN) -> 
-  screenmodel_out
+vars <- unique(data$trendvariabel)
+
+trend <- data.frame()
+
+for (var in seq_along(vars)) {
+  
+  Sys.sleep(5)
+  
+  data_temp <- data %>%
+    filter(trendvariabel == vars[var])
+  
+  data_temp %>% 
+    screeningmodeling(values=  value,
+                      datevar = Date, 
+                      link = "identity", 
+                      conf.type = "conf",
+                      conf.level=0.95,
+                      beep = TRUE, 
+                      tdist = F,
+                      autocor = FALSE, # FALSE ger den enklare varianten av modellen TRUE ger den mer komplexa varianten. autocor indicates whether autocorrelation should be modelled (TRUE) or not (FALSE)
+                      Provplats_ID, trendvariabel, name, STATN) -> 
+    screenmodel_out
+  
+  Sys.sleep(5)
+  
+  for(i in 1:length(unique(screenmodel_out$Provplats_ID))) {
+    
+    individual_trend <- screenmodel_out%>%
+      filter(Provplats_ID==unique(screenmodel_out$Provplats_ID)[i])
+    
+    individual_data <- data_temp %>%
+      filter(Provplats_ID==unique(screenmodel_out$Provplats_ID)[i]) %>%
+      select(n_samples, Date, trendvariabel) %>%
+      rename(date = Date)
+    
+    individual_trend_var <- individual_trend %>%
+      print_individual_trend_mh(y = unique(individual_trend$name), variable = sub("_[^_]*$", "", unique(individual_data$trendvariabel))) %>%
+      left_join(individual_data, by = "date") %>%
+      rename(Provplats_namn = STATN,
+             variable_name = name) %>%
+      relocate(Provplats_ID,
+               Provplats_namn,
+               variable_name,
+               n_samples)
+    
+    trend <- rbind(trend, individual_trend_var)
+    
+    Sys.sleep(1)
+  }
+}
+
 ```
 
 In case the outputfile should be saved as rds file we can use the command below. This create a quite large file.
@@ -106,72 +110,91 @@ The created tibble screenmodel_out contains all necessary information to create 
 Plots for an individual series:
 pH, Alsterälven (Fiugre 2, left):
 ```{r make_tables}
-for(i in 1:length(unique(screenmodel_out$Provplats_ID))) {
-  
-  individual_trend <-  screenmodel_out%>%
-    filter(Provplats_ID==unique(screenmodel_out$Provplats_ID)[i])
-  
-  individual_data <- data %>%
-    filter(Provplats_ID==unique(screenmodel_out$Provplats_ID)[i])
-  
-  for(j in 1:length(unique(individual_trend$name))) {
-    
-    individual_data_var <- individual_data %>%
-      filter(name==unique(individual_trend$name)[j]) %>%
-      ungroup() %>%
-      select(n_samples, Date) %>%
-      rename(date = Date)
-    
-    individual_trend_var <- individual_trend %>%
-      filter(name==unique(individual_trend$name)[j]) %>%
-      print_individual_trend_mh(y = unique(individual_trend$name)[j], variable = sub("_[^_]*$", "", filename)) %>%
-      left_join(individual_data_var, by = "date") %>%
-      rename(Provplats_namn = STATN,
-             variable_name = name) %>%
-      relocate(Provplats_ID,
-               Provplats_namn,
-               variable_name,
-               n_samples)
-    
-    write.table(individual_trend_var,
-                paste0("data_out/individual_",
-                       params$time_res,
-                       "_trend_",
-                       sub("_[^_]*$", "", filename),
-                       "_",
-                       unique(screenmodel_out$STATN)[i], 
-                       "_",
-                       params$depth_interval,
-                       ".csv"),
-                sep = ",",
-                fileEncoding = "utf-8",
-                row.names = FALSE)
-    
-  }}
+
+trend <- trend %>%
+  rename(`Provplats ID (Stationsregistret)` = Provplats_ID,
+         Mätvariable = trendvariabel,
+         Årsvärde = variable,
+         `Trendvärde (modellvärde)` = trend,
+         `Trend (modelltrend)` = signif_sign,
+         `Antal mätningar` = n_samples) %>%
+  mutate(År = year(date),
+         `Trend (modelltrend)` = gsub("0", "neutral", `Trend (modelltrend)`),
+         `Trend (modelltrend)` = gsub("-1", "minskande", `Trend (modelltrend)`),
+         `Trend (modelltrend)` = gsub("1", "ökande", `Trend (modelltrend)`)) %>%
+  select(`Provplats ID (Stationsregistret)`, Mätvariable, År, Årsvärde, `Trendvärde (modellvärde)`, `Trend (modelltrend)`, `Antal mätningar`)
+
+write.table(trend,
+            paste0("data_out/trends.csv"),
+            sep = ",",
+            fileEncoding = "utf-8",
+            row.names = FALSE)
+# for(i in 1:length(unique(screenmodel_out$Provplats_ID))) {
+#   
+#   individual_trend <-  screenmodel_out%>%
+#     filter(Provplats_ID==unique(screenmodel_out$Provplats_ID)[i])
+#   
+#   individual_data <- data %>%
+#     filter(Provplats_ID==unique(screenmodel_out$Provplats_ID)[i])
+#   
+#   for(j in 1:length(unique(individual_trend$name))) {
+#     
+#     individual_data_var <- individual_data %>%
+#       filter(name==unique(individual_trend$name)[j]) %>%
+#       ungroup() %>%
+#       select(n_samples, Date) %>%
+#       rename(date = Date)
+#     
+#     individual_trend_var <- individual_trend %>%
+#       filter(name==unique(individual_trend$name)[j]) %>%
+#       print_individual_trend_mh(y = unique(individual_trend$name)[j], variable = sub("_[^_]*$", "", filename)) %>%
+#       left_join(individual_data_var, by = "date") %>%
+#       rename(Provplats_namn = STATN,
+#              variable_name = name) %>%
+#       relocate(Provplats_ID,
+#                Provplats_namn,
+#                variable_name,
+#                n_samples)
+#     
+#     write.table(individual_trend_var,
+#                 paste0("data_out/individual_",
+#                        params$time_res,
+#                        "_trend_",
+#                        sub("_[^_]*$", "", filename),
+#                        "_",
+#                        unique(screenmodel_out$STATN)[i], 
+#                        "_",
+#                        params$depth_interval,
+#                        ".csv"),
+#                 sep = ",",
+#                 fileEncoding = "utf-8",
+#                 row.names = FALSE)
+#     
+#   }}
 
 ```
 
 Sulphate, Alsterälven (Figure 2, right)
 ```{r make_plots}
-for(i in 1:length(unique(screenmodel_out$STATN))) {
-  
-  plot <- screenmodel_out %>%
-    filter(STATN==unique(screenmodel_out$STATN)[i])%>%
-    plot_individual_trend(y = "mean", title = paste0(sub("_[^_]*$", "", filename), ", ", unique(screenmodel_out$STATN)[i])) 
-  
-  print(plot)
-  
-  ggsave(paste0("plots/individual_",
-                params$time_res,
-                "_trend_",
-                sub("_[^_]*$", "", filename),
-                "_",
-                unique(screenmodel_out$STATN)[i],
-                "_",
-                params$depth_interval,
-                ".png"), plot)
-  
-}
+# for(i in 1:length(unique(screenmodel_out$STATN))) {
+#   
+#   plot <- screenmodel_out %>%
+#     filter(STATN==unique(screenmodel_out$STATN)[i])%>%
+#     plot_individual_trend(y = "mean", title = paste0(sub("_[^_]*$", "", filename), ", ", unique(screenmodel_out$STATN)[i])) 
+#   
+#   print(plot)
+#   
+#   ggsave(paste0("plots/individual_",
+#                 params$time_res,
+#                 "_trend_",
+#                 sub("_[^_]*$", "", filename),
+#                 "_",
+#                 unique(screenmodel_out$STATN)[i],
+#                 "_",
+#                 params$depth_interval,
+#                 ".png"), plot)
+#   
+# }
 
 ```
 

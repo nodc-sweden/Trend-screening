@@ -172,7 +172,7 @@ screeningmodeling <- function(.data,
                                       otherwise = NA_integer_,
                                       quiet = F),
                        .progress = T, seed=T),
-     fderiv = map2(fit, data, possibly(~ derivatives(object=.x, type="forward",term = "s(decimaldate)", interval=conf.type, level=conf.level, data = .y), otherwise = NA_integer_)),
+     fderiv = map2(fit, data, possibly(~ derivatives(object=.x, type="forward",select = "s(decimaldate)", interval=conf.type, level=conf.level, data = .y), otherwise = NA_integer_)),
      
       #fderiv_confint = map2(fderiv, data, possibly(~ .x %>% confint(type = conf.type, level=level), otherwise = NA_integer_)),
       predict = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "terms") %>% as_tibble(), otherwise = NA_integer_)),
@@ -937,8 +937,8 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
   x$fderiv[[1]] %>%
     as_tibble %>%
     rowwise %>%
-    mutate(signif = !between(0, lower, upper),
-           sign=sign(derivative),
+    mutate(signif = !between(0, .lower_ci, .upper_ci),
+           sign=sign(.derivative),
            signif_sign = signif*sign) %>%
     ungroup %>% bind_cols(x$data[[1]],.) %>%
     mutate(trend = annualterm+intercept) %>%
@@ -965,13 +965,17 @@ print_individual_trend_mh <- function(x, y=NULL, title=NULL, variable=NULL){
 output1 <-  x$fderiv[[1]] %>%
     as_tibble %>%
     rowwise %>%
-    mutate(signif = !between(0, lower, upper),
-           sign=sign(derivative),
+    mutate(signif = !between(0, .lower_ci, .upper_ci),
+           sign=sign(.derivative),
            signif_sign = signif*sign, #trend-ett-noll-minusett
            Provplats_ID = unique(x$Provplats_ID), #stationsid
            STATN = unique(x$STATN),
-           name = ifelse(is.null(variable), unique(x$name), variable)) %>% # variabelnamn
-    ungroup %>% bind_cols(x$data[[1]],.) %>%
+           name = ifelse(is.null(variable), unique(x$name), variable)
+           # ,
+           # variable = unique(x$trendvariabel)
+           ) %>% # variabelnamn
+    ungroup %>% left_join(x$data[[1]],.) %>%
+    mutate(trend = annualterm+intercept) %>%
     mutate(trend = annualterm+intercept) %>%
     drop_na(variable)
   return(output1) 
