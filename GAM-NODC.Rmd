@@ -2,7 +2,7 @@
 title: "GAM"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 params: 
-  filename: "trenderHAV.csv"
+  filename: "trenderHAV.txt"
 output: html_document
 knit: (function(inputFile, encoding) {
                         rmarkdown::render(inputFile,
@@ -29,7 +29,7 @@ Read data and create needed variable Date from year, month and day. Keep pH, sul
 ```{r run_model}
 filename <- params$filename
 
-data <- read_tsv(file.path("data_in", filename), locale = locale(encoding="UTF-8")) 
+data <- read_delim(file.path("data_in", filename), delim = "\t", locale = locale(encoding="UTF-8")) 
 
 data$MONTH <- "01"
 data$DAY <- "15"
@@ -39,12 +39,12 @@ data <- data %>%
            ymd()) %>%
   mutate(STATN=gsub("/","-", STATN) )%>%
   # filter(count > 5) %>%
-  select(year_mean,count, variable, Date, REG_ID, STATN) %>%
+  select(value,count, Mätvariabel, Date, REG_ID, STATN) %>%
   rename(Provplats_ID = REG_ID,
          n_samples = count) %>%
-  drop_na(year_mean) %>% 
-  pivot_longer(cols=c("year_mean")) %>%
-  rename(trendvariabel = variable) 
+  drop_na(value) %>% 
+  pivot_longer(cols=c("value")) %>%
+  rename(trendvariabel = Mätvariabel) 
 
 vars <- unique(data$trendvariabel)
 
