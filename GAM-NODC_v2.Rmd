@@ -2,7 +2,7 @@
 title: "GAM"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 params: 
-  filename: "trenderHAV_update2025MHfix2.txt"
+  filename: "trenderBVVF_yearly.txt"
 output: html_document
 knit: (function(inputFile, encoding) {
                         rmarkdown::render(inputFile,
