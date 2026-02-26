@@ -91,20 +91,21 @@ p_surface <- ggplot(surface_data, aes(x = year, y = STATN, fill = trend)) +
     title = "Signifikanta trender i ytvattnet, 0\u201310 m (GAM)",
     x = NULL, y = NULL, fill = "Signifikanta trender"
   ) +
-  theme_minimal(base_size = 10) +
+  theme_minimal(base_size = 18) +
   theme(
-    strip.text = element_text(face = "bold", size = 11),
-    axis.text.y = element_text(size = 7),
-    axis.text.x = element_text(size = 8),
+    strip.text = element_text(face = "bold", size = 20),
+    axis.text.y = element_text(size = 14),
+    axis.text.x = element_text(size = 14),
     legend.position = "bottom",
-    legend.title = element_text(face = "bold"),
+    legend.title = element_text(face = "bold", size = 16),
+    legend.text = element_text(size = 15),
     panel.grid = element_blank(),
     panel.spacing = unit(0.8, "lines"),
-    plot.title = element_text(face = "bold", size = 13, hjust = 0.5)
+    plot.title = element_text(face = "bold", size = 22, hjust = 0.5)
   )
 
 ggsave("plots/BVVF_surface_trends.png", p_surface,
-       width = 18, height = 14, dpi = 200, bg = "white")
+       width = 22, height = 18, dpi = 300, bg = "white")
 message("Saved: plots/BVVF_surface_trends.png")
 
 # --- Bottom water O2 plot (helår + höst faceted) ---
@@ -139,20 +140,21 @@ p_bw <- ggplot(bw_data, aes(x = year, y = STATN, fill = trend)) +
     title = "Signifikanta trender i bottenvatten \u2013 syrgaskoncentration (GAM)",
     x = NULL, y = NULL, fill = "Signifikanta trender"
   ) +
-  theme_minimal(base_size = 10) +
+  theme_minimal(base_size = 18) +
   theme(
-    strip.text = element_text(face = "bold", size = 11),
-    axis.text.y = element_text(size = 8),
-    axis.text.x = element_text(size = 9),
+    strip.text = element_text(face = "bold", size = 20),
+    axis.text.y = element_text(size = 15),
+    axis.text.x = element_text(size = 15),
     legend.position = "bottom",
-    legend.title = element_text(face = "bold"),
+    legend.title = element_text(face = "bold", size = 16),
+    legend.text = element_text(size = 15),
     panel.grid = element_blank(),
     panel.spacing = unit(1.2, "lines"),
-    plot.title = element_text(face = "bold", size = 13, hjust = 0.5)
+    plot.title = element_text(face = "bold", size = 22, hjust = 0.5)
   )
 
 ggsave("plots/BVVF_bottom_O2_trends.png", p_bw,
-       width = 14, height = 6, dpi = 200, bg = "white")
+       width = 18, height = 8, dpi = 300, bg = "white")
 message("Saved: plots/BVVF_bottom_O2_trends.png")
 
 # --- Time series plots: observed values + GAM trend line ---
