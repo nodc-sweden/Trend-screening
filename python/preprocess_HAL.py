@@ -5,7 +5,10 @@ Preprocess HAL data for GAM trend analysis.
 Data sources (in priority order):
 1. data_in/HAL/to_use/sharkweb_data_physicalchemical_1993-2025.txt (master, Swedish headers)
 2. data_in/HAL/to_use/Anholt_1993-2024.txt (English headers, ANHOLT E only)
-3. 2025 cruise folders with Raw_data/data.txt (LIMS short-format, supplementary)
+3. 2025 LIMS export folders with Raw_data/data.txt (LIMS short-format, supplementary)
+
+SLA_0-10 rows (pre-integrated chlorophyll samples) in LIMS export data are excluded to avoid
+double-counting with discrete-depth chlorophyll measurements.
 
 Stations: L9, N5, N6, N7, N13, N14, ANHOLT E  (years 1993-2025)
 
@@ -135,7 +138,7 @@ ENGLISH_TO_SHORT = {
     "QFLAG Chlorophyll-a bottle": "Q_CPHL",
 }
 
-# Short internal names used in LIMS/cruise data.txt files (already correct)
+# Short internal names used in LIMS export data.txt files (already correct)
 LIMS_COLUMNS = [
     "STATN", "SDATE", "MYEAR", "DEPH",
     "TEMP_BTL", "Q_TEMP_BTL", "TEMP_CTD", "Q_TEMP_CTD",
@@ -172,12 +175,15 @@ def read_sharkweb_english(file_path: Path) -> pd.DataFrame:
     return df
 
 
-def read_lims_cruise(folder: Path) -> pd.DataFrame:
-    """Read a LIMS cruise Raw_data/data.txt file (short column names)."""
+def read_lims_export(folder: Path) -> pd.DataFrame:
+    """Read a LIMS export Raw_data/data.txt file (short column names)."""
+    # Handle both Raw_data and raw_data casing
     data_file = folder / "Raw_data" / "data.txt"
     if not data_file.exists():
+        data_file = folder / "raw_data" / "data.txt"
+    if not data_file.exists():
         return pd.DataFrame()
-    print(f"Reading cruise: {folder.name}")
+    print(f"Reading LIMS export: {folder.name}")
     df = pd.read_csv(data_file, sep="\t", encoding="cp1252", low_memory=False)
     print(f"  {len(df)} rows, stations: {sorted(df['STATN'].unique())}")
 
@@ -186,6 +192,7 @@ def read_lims_cruise(folder: Path) -> pd.DataFrame:
         df = df.rename(columns={"MYEAR": "YEAR"})
 
     return df
+
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +420,7 @@ def calculate_yearly_mean(df_depth_mean: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(results, ignore_index=True)
 
 
+
 # ---------------------------------------------------------------------------
 # Deduplication
 # ---------------------------------------------------------------------------
@@ -464,17 +472,26 @@ def main():
     print("Merging Anholt into master...")
     df_master = deduplicate(df_master, df_anholt)
 
-    # --- 3. Load 2025 cruise data (supplementary) ---
-    cruise_folders = sorted(hal_dir.glob("2026-*"))
-    for folder in cruise_folders:
-        df_cruise = read_lims_cruise(folder)
-        if df_cruise.empty:
+    # --- 3. Load 2025 LIMS export data (supplementary) ---
+    lims_folders = sorted(hal_dir.glob("2026-*"))
+    for folder in lims_folders:
+        df_lims = read_lims_export(folder)
+        if df_lims.empty:
             continue
-        df_cruise = normalise(df_cruise)
-        if df_cruise.empty:
+        # Remove SLA rows (pre-integrated chlorophyll) to avoid double-counting
+        if "SMPNO" in df_lims.columns:
+            n_before = len(df_lims)
+            df_lims = df_lims[
+                ~df_lims["SMPNO"].astype(str).str.contains("SLA", na=False)
+            ].copy()
+            n_removed = n_before - len(df_lims)
+            if n_removed > 0:
+                print(f"  Removed {n_removed} SLA rows from {folder.name}")
+        df_lims = normalise(df_lims)
+        if df_lims.empty:
             continue
-        print(f"  Merging cruise data from {folder.name}...")
-        df_master = deduplicate(df_master, df_cruise)
+        print(f"  Merging LIMS export data from {folder.name}...")
+        df_master = deduplicate(df_master, df_lims)
 
     df = df_master
     print(f"\nCombined: {len(df)} rows")
